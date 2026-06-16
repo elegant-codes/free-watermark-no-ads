@@ -338,7 +338,7 @@ export default function WatermarkCanvas() {
           className="hidden"
           onChange={handleFileUpload}
         />
-        <div className="text-center">
+        <div className="max-w-sm text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Upload className="h-6 w-6 text-muted-foreground" />
           </div>
@@ -352,6 +352,27 @@ export default function WatermarkCanvas() {
             <Upload className="h-4 w-4" />
             Choose Image
           </Button>
+          <div className="mt-6 space-y-2 text-left text-sm text-muted-foreground/70">
+            <p className="text-center text-xs font-medium uppercase tracking-wider text-muted-foreground/50">
+              How it works
+            </p>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">1</span>
+              <span>Upload your base image</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">2</span>
+              <span>Add a logo watermark or text watermark from the controls panel</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">3</span>
+              <span>Drag, resize, rotate, and adjust opacity to your liking</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">4</span>
+              <span>Export your watermarked image as PNG or JPEG</span>
+            </div>
+          </div>
         </div>
       </div>
     )
