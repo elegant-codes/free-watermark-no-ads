@@ -111,7 +111,7 @@ export default function ExportDialog() {
       a.download = `${exportSettings.filename}.${exportSettings.format}`
       a.click()
       URL.revokeObjectURL(url)
-      useToastStore.getState().addToast('Watermark exported successfully!')
+      useToastStore.getState().addToast('Watermark saved successfully!')
       setOpen(false)
     } finally {
       setExporting(false)
@@ -123,12 +123,12 @@ export default function ExportDialog() {
       <DialogTrigger asChild>
         <Button variant="default" size="sm" className="gap-2">
           <Download className="h-4 w-4" />
-          <span>Export</span>
+            <span>Save</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Export Watermarked Image</DialogTitle>
+          <DialogTitle>Save Watermarked Image</DialogTitle>
           <DialogDescription>
             Choose format and quality settings for your export.
           </DialogDescription>
@@ -179,7 +179,7 @@ export default function ExportDialog() {
             Cancel
           </Button>
           <Button onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Exporting...' : 'Download'}
+            {exporting ? 'Saving...' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
