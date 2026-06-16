@@ -1,21 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Stage, Layer, Image, Transformer, Text, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
-import { Upload } from 'lucide-react'
+import { Loader2, Upload } from 'lucide-react'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
+import { useToastStore } from '@/store/useToastStore'
 import { loadImageFromDataUrl } from '@/utils/image'
 import { scaleToFit } from '@/utils/cn'
 import { Button } from '@/components/ui/button'
 
-function useImageLoader(dataUrl: string | null): HTMLImageElement | null {
+function useImageLoader(dataUrl: string | null): { img: HTMLImageElement | null; loading: boolean } {
   const [img, setImg] = useState<HTMLImageElement | null>(null)
+  const [loading, setLoading] = useState(false)
   useEffect(() => {
-    if (!dataUrl) { setImg(null); return }
+    if (!dataUrl) { setImg(null); setLoading(false); return }
+    setLoading(true)
     let cancelled = false
-    loadImageFromDataUrl(dataUrl).then((i) => { if (!cancelled) setImg(i) })
+    loadImageFromDataUrl(dataUrl)
+      .then((i) => { if (!cancelled) { setImg(i); setLoading(false) } })
+      .catch(() => { if (!cancelled) { setLoading(false); useToastStore.getState().addToast('Failed to load image', 'error') } })
     return () => { cancelled = true }
   }, [dataUrl])
-  return img
+  return { img, loading }
 }
 
 function LayerImage({ layer, isCropping, onSelect, onDragEnd, onTransformEnd, registerShape }: {
@@ -26,7 +31,7 @@ function LayerImage({ layer, isCropping, onSelect, onDragEnd, onTransformEnd, re
   onTransformEnd: (id: string) => void
   registerShape: (id: string, node: Konva.Shape | null) => void
 }) {
-  const img = useImageLoader(layer.dataUrl)
+  const { img } = useImageLoader(layer.dataUrl)
   return img ? (
     <Image
       ref={(node) => registerShape(layer.id, node)}
@@ -97,7 +102,7 @@ export default function WatermarkCanvas() {
   const setBaseImageSize = useWatermarkStore((s) => s.setBaseImageSize)
   const isCropping = useWatermarkStore((s) => s.crop.isCropping)
 
-  const bgImage = useImageLoader(baseImage)
+  const { img: bgImage, loading: bgLoading } = useImageLoader(baseImage)
 
   const stageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
@@ -328,8 +333,13 @@ export default function WatermarkCanvas() {
     return (
       <div
         ref={containerRef}
-        className="flex h-full w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/10 p-8 transition-colors hover:border-primary/50 hover:bg-muted/20"
+        role="button"
+        tabIndex={0}
+        className="flex h-full w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/10 p-8 transition-colors hover:border-primary/50 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click()
+        }}
       >
         <input
           ref={fileInputRef}
@@ -348,7 +358,7 @@ export default function WatermarkCanvas() {
           <p className="mt-1 text-sm text-muted-foreground/60">
             Click to browse &middot; PNG, JPEG, WebP
           </p>
-          <Button variant="default" size="sm" className="mt-4 gap-2 pointer-events-none">
+          <Button variant="default" size="sm" className="mt-4 gap-2">
             <Upload className="h-4 w-4" />
             Choose Image
           </Button>
@@ -387,6 +397,14 @@ export default function WatermarkCanvas() {
         backgroundSize: '20px 20px',
       }}
     >
+      {bgLoading && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground">Loading image…</span>
+          </div>
+        </div>
+      )}
       {isCropping && (
         <div
           className="absolute inset-0 z-10 cursor-crosshair"

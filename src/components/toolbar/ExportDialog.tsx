@@ -113,6 +113,8 @@ export default function ExportDialog() {
       URL.revokeObjectURL(url)
       useToastStore.getState().addToast('Watermark download started!')
       setOpen(false)
+    } catch {
+      useToastStore.getState().addToast('Failed to export image', 'error')
     } finally {
       setExporting(false)
     }

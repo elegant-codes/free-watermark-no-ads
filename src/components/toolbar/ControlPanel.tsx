@@ -6,8 +6,6 @@ import { Label } from '@/components/ui/label'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { FONT_FAMILIES } from '@/utils/image'
 import PositionPresets from '@/components/toolbar/PositionPresets'
-import ExportDialog from '@/components/toolbar/ExportDialog'
-import BatchDialog from '@/components/toolbar/BatchDialog'
 
 function ImageTab() {
   const layers = useWatermarkStore((s) => s.layers)
@@ -17,6 +15,7 @@ function ImageTab() {
   const updateTextWatermark = useWatermarkStore((s) => s.updateTextWatermark)
   const removeLayer = useWatermarkStore((s) => s.removeLayer)
   const startCrop = useWatermarkStore((s) => s.startCrop)
+  const pushHistory = useWatermarkStore((s) => s.pushHistory)
 
   const selected = layers.find((l) => l.id === selectedLayerId)
   const isImageSelected = selected?.type === 'image'
@@ -102,6 +101,7 @@ function ImageTab() {
                 step={0.01}
                 value={[selected.opacity ?? 1]}
                 onValueChange={handleOpacity}
+                onValueCommit={() => pushHistory()}
               />
             </div>
 
@@ -119,6 +119,7 @@ function ImageTab() {
                   step={0.01}
                   value={[selected.scale]}
                   onValueChange={handleScale}
+                  onValueCommit={() => pushHistory()}
                 />
               </div>
             )}
@@ -136,6 +137,7 @@ function ImageTab() {
                 step={1}
                 value={[selected.rotation ?? 0]}
                 onValueChange={handleRotation}
+                onValueCommit={() => pushHistory()}
               />
             </div>
           </div>
@@ -178,6 +180,7 @@ function TextTab() {
   const layers = useWatermarkStore((s) => s.layers)
   const selectedLayerId = useWatermarkStore((s) => s.selectedLayerId)
   const updateTextWatermark = useWatermarkStore((s) => s.updateTextWatermark)
+  const pushHistory = useWatermarkStore((s) => s.pushHistory)
   const selected = layers.find(
     (l) => l.id === selectedLayerId && l.type === 'text'
   ) as import('@/types').WatermarkText | undefined
@@ -213,6 +216,7 @@ function TextTab() {
             onValueChange={([v]) =>
               updateTextWatermark(selected.id, { fontSize: v })
             }
+            onValueCommit={() => pushHistory()}
             className="flex-1"
           />
           <span className="w-10 text-right text-sm text-muted-foreground">
@@ -313,18 +317,14 @@ function SettingsTab() {
 
   return (
     <div className="space-y-4">
-      <ExportDialog />
-      <BatchDialog />
-      <div className="pt-2">
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={resetAll}
-        >
-          Reset All
-        </Button>
-      </div>
+      <Button
+        variant="destructive"
+        size="sm"
+        className="w-full"
+        onClick={resetAll}
+      >
+        Reset All
+      </Button>
     </div>
   )
 }

@@ -1,11 +1,10 @@
-import { useEffect } from 'react'
-import { Undo2, Redo2, Image as ImageIcon } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Undo2, Redo2, Image as ImageIcon, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import WatermarkCanvas from '@/components/canvas/WatermarkCanvas'
-import UploadButton from '@/components/toolbar/UploadButton'
 import ThemeToggle from '@/components/toolbar/ThemeToggle'
 import ControlPanel from '@/components/toolbar/ControlPanel'
 import BatchDialog from '@/components/toolbar/BatchDialog'
@@ -17,6 +16,7 @@ function Header() {
   const redo = useWatermarkStore((s) => s.redo)
   const historyIndex = useWatermarkStore((s) => s.historyIndex)
   const history = useWatermarkStore((s) => s.history)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-4 safe-top">
@@ -29,13 +29,39 @@ function Header() {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = (ev) => {
+              if (typeof ev.target?.result === 'string') {
+                useWatermarkStore.getState().setBaseImage(ev.target.result, file)
+              }
+            }
+            reader.readAsDataURL(file)
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => fileInputRef.current?.click()}
+          className="h-9 w-9"
+          aria-label="Upload image"
+        >
+          <Upload className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={undo}
           disabled={historyIndex <= 0}
           className="h-9 w-9"
-          title="Undo (Cmd+Z)"
+          aria-label="Undo (Cmd+Z)"
         >
           <Undo2 className="h-4 w-4" />
         </Button>
@@ -45,13 +71,12 @@ function Header() {
           onClick={redo}
           disabled={historyIndex >= history.length - 1}
           className="h-9 w-9"
-          title="Redo (Cmd+Shift+Z)"
+          aria-label="Redo (Cmd+Shift+Z)"
         >
           <Redo2 className="h-4 w-4" />
         </Button>
         <ExportDialog />
         <BatchDialog />
-        <UploadButton />
         <ThemeToggle />
       </div>
     </header>
@@ -100,17 +125,41 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      const isInDialog = !!target.closest('[role="dialog"]')
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (isInDialog) return
         e.preventDefault()
         if (e.shiftKey) {
           useWatermarkStore.getState().redo()
         } else {
           useWatermarkStore.getState().undo()
         }
+        return
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+        e.preventDefault()
+        const fileInput = document.querySelector<HTMLInputElement>('header input[type="file"]')
+        fileInput?.click()
+        return
+      }
+
+      if (e.key === 'Escape' && !isInDialog && !isInput) {
+        const store = useWatermarkStore.getState()
+        if (store.crop.isCropping) {
+          store.cancelCrop()
+        } else if (store.selectedLayerId) {
+          store.selectLayer(null)
+        }
+        return
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && !isInDialog) {
         const selectedId = useWatermarkStore.getState().selectedLayerId
-        if (selectedId && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        if (selectedId) {
           useWatermarkStore.getState().removeLayer(selectedId)
         }
       }

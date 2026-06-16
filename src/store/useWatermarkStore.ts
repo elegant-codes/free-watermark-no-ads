@@ -202,6 +202,7 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
     set((state) => ({
       layers: [...state.layers, newLayer],
       selectedLayerId: newLayer.id,
+      activeTab: 'text',
     }))
     get().pushHistory()
   },
