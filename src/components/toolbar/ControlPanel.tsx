@@ -7,6 +7,7 @@ import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { FONT_FAMILIES } from '@/utils/image'
 import PositionPresets from '@/components/toolbar/PositionPresets'
 import ExportDialog from '@/components/toolbar/ExportDialog'
+import BatchDialog from '@/components/toolbar/BatchDialog'
 
 function ImageTab() {
   const layers = useWatermarkStore((s) => s.layers)
@@ -297,6 +298,7 @@ function SettingsTab() {
   return (
     <div className="space-y-4">
       <ExportDialog />
+      <BatchDialog />
       <div className="pt-2">
         <Button
           variant="destructive"

@@ -8,6 +8,7 @@ import WatermarkCanvas from '@/components/canvas/WatermarkCanvas'
 import UploadButton from '@/components/toolbar/UploadButton'
 import ThemeToggle from '@/components/toolbar/ThemeToggle'
 import ControlPanel from '@/components/toolbar/ControlPanel'
+import BatchDialog from '@/components/toolbar/BatchDialog'
 
 function Header() {
   const undo = useWatermarkStore((s) => s.undo)
@@ -44,6 +45,7 @@ function Header() {
         >
           <Redo2 className="h-4 w-4" />
         </Button>
+        <BatchDialog />
         <UploadButton />
         <ThemeToggle />
       </div>
