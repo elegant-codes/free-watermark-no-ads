@@ -27,6 +27,8 @@ export async function renderWatermarkOnImage(input: RenderInput): Promise<Blob> 
   ctx.drawImage(baseImg, 0, 0, baseWidth, baseHeight)
 
   const { width: displayW, height: displayH } = scaleToFit(baseWidth, baseHeight, canvasWidth * 0.9, canvasHeight * 0.9)
+  const offX = (canvasWidth - displayW) / 2
+  const offY = (canvasHeight - displayH) / 2
   const scaleX = baseWidth / displayW
   const scaleY = baseHeight / displayH
 
@@ -36,10 +38,12 @@ export async function renderWatermarkOnImage(input: RenderInput): Promise<Blob> 
 
     if (layer.type === 'image') {
       const wmImg = await loadImageFromDataUrl(layer.dataUrl)
+      const imgRelX = layer.rect.x - offX
+      const imgRelY = layer.rect.y - offY
       ctx.globalAlpha = layer.opacity
       ctx.translate(
-        layer.rect.x * scaleX + (layer.rect.width * layer.scale * scaleX) / 2,
-        layer.rect.y * scaleY + (layer.rect.height * layer.scale * scaleY) / 2
+        imgRelX * scaleX + (layer.rect.width * layer.scale * scaleX) / 2,
+        imgRelY * scaleY + (layer.rect.height * layer.scale * scaleY) / 2
       )
       ctx.rotate((layer.rotation * Math.PI) / 180)
       const drawW = layer.rect.width * layer.scale * scaleX
@@ -55,8 +59,10 @@ export async function renderWatermarkOnImage(input: RenderInput): Promise<Blob> 
         ctx.drawImage(wmImg, -drawW / 2, -drawH / 2, drawW, drawH)
       }
     } else {
+      const imgRelX = layer.position.x - offX
+      const imgRelY = layer.position.y - offY
       ctx.globalAlpha = layer.opacity
-      ctx.translate(layer.position.x * scaleX, layer.position.y * scaleY)
+      ctx.translate(imgRelX * scaleX, imgRelY * scaleY)
       ctx.rotate((layer.rotation * Math.PI) / 180)
       ctx.font = `${layer.fontSize * scaleX}px ${layer.fontFamily}`
       ctx.fillStyle = layer.color

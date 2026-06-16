@@ -52,6 +52,8 @@ export default function ExportDialog() {
       const cw = store.canvasSize.width || canvas.width
       const ch = store.canvasSize.height || canvas.height
       const { width: displayW, height: displayH } = scaleToFit(natW, natH, cw * 0.9, ch * 0.9)
+      const offX = (cw - displayW) / 2
+      const offY = (ch - displayH) / 2
       const scaleX = canvas.width / displayW
       const scaleY = canvas.height / displayH
 
@@ -60,10 +62,12 @@ export default function ExportDialog() {
         ctx.save()
         if (layer.type === 'image') {
           const wmImg = await loadImageFromDataUrl(layer.dataUrl)
+          const imgRelX = layer.rect.x - offX
+          const imgRelY = layer.rect.y - offY
           ctx.globalAlpha = layer.opacity
           ctx.translate(
-            layer.rect.x * scaleX + (layer.rect.width * layer.scale * scaleX) / 2,
-            layer.rect.y * scaleY + (layer.rect.height * layer.scale * scaleY) / 2
+            imgRelX * scaleX + (layer.rect.width * layer.scale * scaleX) / 2,
+            imgRelY * scaleY + (layer.rect.height * layer.scale * scaleY) / 2
           )
           ctx.rotate((layer.rotation * Math.PI) / 180)
           const drawW = layer.rect.width * layer.scale * scaleX
@@ -74,8 +78,10 @@ export default function ExportDialog() {
             ctx.drawImage(wmImg, -drawW / 2, -drawH / 2, drawW, drawH)
           }
         } else {
+          const imgRelX = layer.position.x - offX
+          const imgRelY = layer.position.y - offY
           ctx.globalAlpha = layer.opacity
-          ctx.translate(layer.position.x * scaleX, layer.position.y * scaleY)
+          ctx.translate(imgRelX * scaleX, imgRelY * scaleY)
           ctx.rotate((layer.rotation * Math.PI) / 180)
           ctx.font = `${layer.fontSize * scaleX}px ${layer.fontFamily}`
           ctx.fillStyle = layer.color
