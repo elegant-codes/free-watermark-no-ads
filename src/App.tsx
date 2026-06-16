@@ -10,6 +10,7 @@ import ThemeToggle from '@/components/toolbar/ThemeToggle'
 import ControlPanel from '@/components/toolbar/ControlPanel'
 import BatchDialog from '@/components/toolbar/BatchDialog'
 import ExportDialog from '@/components/toolbar/ExportDialog'
+import Toaster from '@/components/Toaster'
 
 function Header() {
   const undo = useWatermarkStore((s) => s.undo)
@@ -136,6 +137,7 @@ export default function App() {
           <DesktopSidebar />
         </div>
       )}
+      <Toaster />
     </div>
   )
 }

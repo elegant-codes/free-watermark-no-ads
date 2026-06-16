@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
+import { useToastStore } from '@/store/useToastStore'
 import { createImageFromCanvas } from '@/utils/image'
 
 export default function ExportDialog() {
@@ -110,6 +111,8 @@ export default function ExportDialog() {
       a.download = `${exportSettings.filename}.${exportSettings.format}`
       a.click()
       URL.revokeObjectURL(url)
+      useToastStore.getState().addToast('Watermark exported successfully!')
+      setOpen(false)
     } finally {
       setExporting(false)
     }
