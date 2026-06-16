@@ -28,7 +28,7 @@ function Header() {
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-0 sm:gap-1.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -50,7 +50,7 @@ function Header() {
           variant="ghost"
           size="icon"
           onClick={() => fileInputRef.current?.click()}
-          className="h-9 w-9"
+          className="h-8 w-8 sm:h-9 sm:w-9"
           aria-label="Upload image"
         >
           <Upload className="h-4 w-4" />
@@ -60,7 +60,7 @@ function Header() {
           size="icon"
           onClick={undo}
           disabled={historyIndex <= 0}
-          className="h-9 w-9"
+          className="h-8 w-8 sm:h-9 sm:w-9"
           aria-label="Undo (Cmd+Z)"
         >
           <Undo2 className="h-4 w-4" />
@@ -70,7 +70,7 @@ function Header() {
           size="icon"
           onClick={redo}
           disabled={historyIndex >= history.length - 1}
-          className="h-9 w-9"
+          className="h-8 w-8 sm:h-9 sm:w-9"
           aria-label="Redo (Cmd+Shift+Z)"
         >
           <Redo2 className="h-4 w-4" />

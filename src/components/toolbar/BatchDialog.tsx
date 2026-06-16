@@ -109,9 +109,9 @@ export default function BatchDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2 px-2 sm:px-3">
           <Package className="h-4 w-4" />
-          <span>Batch</span>
+          <span className="hidden sm:inline">Batch</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">

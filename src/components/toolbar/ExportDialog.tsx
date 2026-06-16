@@ -123,9 +123,9 @@ export default function ExportDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="default" size="sm" className="gap-2">
+        <Button variant="default" size="sm" className="gap-2 px-2 sm:px-3">
           <Download className="h-4 w-4" />
-            <span>Download</span>
+            <span className="hidden sm:inline">Download</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
