@@ -56,7 +56,12 @@ function Header() {
 function MobileBottomSheet() {
   const [expanded, setExpanded] = useState(false)
   const isOpen = useWatermarkStore((s) => s.isControlPanelOpen)
-  const togglePanel = useWatermarkStore((s) => s.toggleControlPanel)
+  const setPanelOpen = useCallback(
+    (v: boolean) => useWatermarkStore.getState().isControlPanelOpen !== v && useWatermarkStore.getState().toggleControlPanel(),
+    []
+  )
+  const layers = useWatermarkStore((s) => s.layers)
+  const isCropping = useWatermarkStore((s) => s.crop.isCropping)
   const sheetRef = useRef<HTMLDivElement>(null)
   const startY = useRef(0)
 
@@ -69,27 +74,48 @@ function MobileBottomSheet() {
       const dy = e.changedTouches[0].clientY - startY.current
       if (Math.abs(dy) > 50) {
         setExpanded(dy < 0)
+        setPanelOpen(dy < 0)
       }
     },
-    []
+    [setPanelOpen]
   )
 
   useEffect(() => {
     if (isOpen) setExpanded(true)
   }, [isOpen])
 
+  useEffect(() => {
+    if (layers.length > 0 && !expanded) {
+      setExpanded(true)
+      setPanelOpen(true)
+    }
+  }, [layers.length, expanded, setPanelOpen])
+
+  const hasLayers = layers.length > 0
+  const layerCount = layers.length
+
   return (
     <>
       {!expanded && (
         <button
-          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-primary p-3 text-primary-foreground shadow-lg"
+          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-lg"
           onClick={() => {
             setExpanded(true)
-            togglePanel()
+            setPanelOpen(true)
           }}
         >
-          <PanelRightOpen className="h-5 w-5" />
+          <PanelRightOpen className="h-4 w-4" />
+          {hasLayers ? `${layerCount} watermark${layerCount > 1 ? 's' : ''}` : 'Controls'}
         </button>
+      )}
+      {expanded && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20"
+          onClick={() => {
+            setExpanded(false)
+            setPanelOpen(false)
+          }}
+        />
       )}
       <div
         ref={sheetRef}
@@ -97,17 +123,26 @@ function MobileBottomSheet() {
           expanded ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
-        <div
-          className="mx-auto h-1.5 w-10 cursor-grab rounded-full bg-muted-foreground/30"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onClick={() => {
-            setExpanded(false)
-            togglePanel()
-          }}
-        />
-        <div className="max-h-[50vh] overflow-y-auto rounded-t-xl border bg-background shadow-xl safe-bottom">
-          <ControlPanel />
+        <div className="rounded-t-xl border bg-background shadow-xl safe-bottom">
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <span className="text-sm font-medium">
+              Controls
+              {isCropping && <span className="ml-2 text-xs text-blue-500">(Crop mode)</span>}
+            </span>
+            <div
+              className="mx-auto h-1.5 w-10 cursor-grab rounded-full bg-muted-foreground/30"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onClick={() => {
+                setExpanded(false)
+                setPanelOpen(false)
+              }}
+            />
+            <div className="w-12" />
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto">
+            <ControlPanel />
+          </div>
         </div>
       </div>
     </>
