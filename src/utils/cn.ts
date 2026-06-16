@@ -28,34 +28,39 @@ export function scaleToFit(
 
 export function getPositionByPreset(
   preset: string,
-  canvasWidth: number,
-  canvasHeight: number,
+  contentWidth: number,
+  contentHeight: number,
   watermarkWidth: number,
-  watermarkHeight: number
+  watermarkHeight: number,
+  offsetX = 0,
+  offsetY = 0
 ): { x: number; y: number } {
   const pad = 20
-  switch (preset) {
-    case 'top-left':
-      return { x: pad, y: pad }
-    case 'top-center':
-      return { x: (canvasWidth - watermarkWidth) / 2, y: pad }
-    case 'top-right':
-      return { x: canvasWidth - watermarkWidth - pad, y: pad }
-    case 'middle-left':
-      return { x: pad, y: (canvasHeight - watermarkHeight) / 2 }
-    case 'center':
-      return { x: (canvasWidth - watermarkWidth) / 2, y: (canvasHeight - watermarkHeight) / 2 }
-    case 'middle-right':
-      return { x: canvasWidth - watermarkWidth - pad, y: (canvasHeight - watermarkHeight) / 2 }
-    case 'bottom-left':
-      return { x: pad, y: canvasHeight - watermarkHeight - pad }
-    case 'bottom-center':
-      return { x: (canvasWidth - watermarkWidth) / 2, y: canvasHeight - watermarkHeight - pad }
-    case 'bottom-right':
-      return { x: canvasWidth - watermarkWidth - pad, y: canvasHeight - watermarkHeight - pad }
-    case 'tile':
-      return { x: pad, y: pad }
-    default:
-      return { x: pad, y: pad }
-  }
+  const base = (() => {
+    switch (preset) {
+      case 'top-left':
+        return { x: pad, y: pad }
+      case 'top-center':
+        return { x: (contentWidth - watermarkWidth) / 2, y: pad }
+      case 'top-right':
+        return { x: contentWidth - watermarkWidth - pad, y: pad }
+      case 'middle-left':
+        return { x: pad, y: (contentHeight - watermarkHeight) / 2 }
+      case 'center':
+        return { x: (contentWidth - watermarkWidth) / 2, y: (contentHeight - watermarkHeight) / 2 }
+      case 'middle-right':
+        return { x: contentWidth - watermarkWidth - pad, y: (contentHeight - watermarkHeight) / 2 }
+      case 'bottom-left':
+        return { x: pad, y: contentHeight - watermarkHeight - pad }
+      case 'bottom-center':
+        return { x: (contentWidth - watermarkWidth) / 2, y: contentHeight - watermarkHeight - pad }
+      case 'bottom-right':
+        return { x: contentWidth - watermarkWidth - pad, y: contentHeight - watermarkHeight - pad }
+      case 'tile':
+        return { x: pad, y: pad }
+      default:
+        return { x: pad, y: pad }
+    }
+  })()
+  return { x: base.x + offsetX, y: base.y + offsetY }
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { generateId, getPositionByPreset } from '@/utils/cn'
+import { scaleToFit, generateId, getPositionByPreset } from '@/utils/cn'
 import type {
   Layer,
   WatermarkImage,
@@ -264,12 +264,18 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
     const selected = state.layers.find((l) => l.id === state.selectedLayerId)
     if (!selected) return
 
-    const canvasW = state.baseImageSize?.width ?? 800
-    const canvasH = state.baseImageSize?.height ?? 600
+    const cw = state.canvasSize.width
+    const ch = state.canvasSize.height
+    const iw = state.baseImageSize?.width ?? cw
+    const ih = state.baseImageSize?.height ?? ch
+    const { width: dw, height: dh } = scaleToFit(iw, ih, cw * 0.9, ch * 0.9)
+    const ox = (cw - dw) / 2
+    const oy = (ch - dh) / 2
+
     const wmW = selected.type === 'image' ? selected.rect.width * selected.scale : 200
     const wmH = selected.type === 'image' ? selected.rect.height * selected.scale : 50
 
-    const pos = getPositionByPreset(preset, canvasW, canvasH, wmW, wmH)
+    const pos = getPositionByPreset(preset, dw, dh, wmW, wmH, ox, oy)
 
     if (selected.type === 'image') {
       get().updateWatermarkPosition(selected.id, pos.x, pos.y)
