@@ -370,7 +370,7 @@ export default function WatermarkCanvas() {
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">4</span>
-              <span>Save your watermarked image as PNG or JPEG</span>
+              <span>Download your watermarked image as PNG or JPEG</span>
             </div>
           </div>
         </div>
