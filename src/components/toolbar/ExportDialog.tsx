@@ -21,26 +21,24 @@ import {
 } from '@/components/ui/select'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { useToastStore } from '@/store/useToastStore'
-import { createImageFromCanvas } from '@/utils/image'
+import { createImageFromCanvas, loadImageFromDataUrl } from '@/utils/image'
+import { scaleToFit } from '@/utils/cn'
 
 export default function ExportDialog() {
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const { exportSettings, setExportSettings, baseImage } = useWatermarkStore()
-  const layers = useWatermarkStore((s) => s.layers)
+  const { exportSettings, setExportSettings } = useWatermarkStore()
 
   const handleExport = async () => {
-    if (!baseImage) return
     setExporting(true)
 
     try {
+      const store = useWatermarkStore.getState()
+      const b64 = store.baseImage
+      if (!b64) { setExporting(false); return }
+
       const canvas = document.createElement('canvas')
-      const img = new Image()
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve()
-        img.onerror = reject
-        img.src = baseImage
-      })
+      const img = await loadImageFromDataUrl(b64)
 
       canvas.width = img.naturalWidth
       canvas.height = img.naturalHeight
@@ -48,51 +46,38 @@ export default function ExportDialog() {
       const ctx = canvas.getContext('2d')!
       ctx.drawImage(img, 0, 0)
 
-      for (const layer of layers) {
+      const currentLayers = store.layers
+      const natW = store.baseImageSize?.width ?? canvas.width
+      const natH = store.baseImageSize?.height ?? canvas.height
+      const cw = store.canvasSize.width || canvas.width
+      const ch = store.canvasSize.height || canvas.height
+      const { width: displayW, height: displayH } = scaleToFit(natW, natH, cw * 0.9, ch * 0.9)
+      const scaleX = canvas.width / displayW
+      const scaleY = canvas.height / displayH
+
+      for (const layer of currentLayers) {
         if (!layer.visible) continue
         ctx.save()
         if (layer.type === 'image') {
-          const wmImg = new Image()
-          await new Promise<void>((resolve, reject) => {
-            wmImg.onload = () => resolve()
-            wmImg.onerror = reject
-            wmImg.src = layer.dataUrl
-          })
-          const scaleX = canvas.width / (useWatermarkStore.getState().baseImageSize?.width ?? canvas.width)
-          const scaleY = canvas.height / (useWatermarkStore.getState().baseImageSize?.height ?? canvas.height)
+          const wmImg = await loadImageFromDataUrl(layer.dataUrl)
           ctx.globalAlpha = layer.opacity
           ctx.translate(
             layer.rect.x * scaleX + (layer.rect.width * layer.scale * scaleX) / 2,
             layer.rect.y * scaleY + (layer.rect.height * layer.scale * scaleY) / 2
           )
           ctx.rotate((layer.rotation * Math.PI) / 180)
+          const drawW = layer.rect.width * layer.scale * scaleX
+          const drawH = layer.rect.height * layer.scale * scaleY
           if (layer.cropRect) {
-            ctx.drawImage(
-              wmImg,
-              layer.cropRect.x, layer.cropRect.y,
-              layer.cropRect.width, layer.cropRect.height,
-              -(layer.rect.width * layer.scale * scaleX) / 2,
-              -(layer.rect.height * layer.scale * scaleY) / 2,
-              layer.rect.width * layer.scale * scaleX,
-              layer.rect.height * layer.scale * scaleY
-            )
+            ctx.drawImage(wmImg, layer.cropRect.x, layer.cropRect.y, layer.cropRect.width, layer.cropRect.height, -drawW / 2, -drawH / 2, drawW, drawH)
           } else {
-            ctx.drawImage(
-              wmImg,
-              -(layer.rect.width * layer.scale * scaleX) / 2,
-              -(layer.rect.height * layer.scale * scaleY) / 2,
-              layer.rect.width * layer.scale * scaleX,
-              layer.rect.height * layer.scale * scaleY
-            )
+            ctx.drawImage(wmImg, -drawW / 2, -drawH / 2, drawW, drawH)
           }
         } else {
           ctx.globalAlpha = layer.opacity
-          ctx.translate(
-            layer.position.x * (canvas.width / (useWatermarkStore.getState().baseImageSize?.width ?? canvas.width)),
-            layer.position.y * (canvas.height / (useWatermarkStore.getState().baseImageSize?.height ?? canvas.height))
-          )
+          ctx.translate(layer.position.x * scaleX, layer.position.y * scaleY)
           ctx.rotate((layer.rotation * Math.PI) / 180)
-          ctx.font = `${layer.fontSize * (canvas.width / (useWatermarkStore.getState().baseImageSize?.width ?? canvas.width))}px ${layer.fontFamily}`
+          ctx.font = `${layer.fontSize * scaleX}px ${layer.fontFamily}`
           ctx.fillStyle = layer.color
           ctx.textBaseline = 'top'
           ctx.fillText(layer.text, 0, 0)

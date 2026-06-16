@@ -68,7 +68,9 @@ export default function BatchDialog() {
           baseDataUrl,
           baseWidth: img.naturalWidth,
           baseHeight: img.naturalHeight,
-          layers,
+          canvasWidth: useWatermarkStore.getState().canvasSize.width,
+          canvasHeight: useWatermarkStore.getState().canvasSize.height,
+          layers: useWatermarkStore.getState().layers,
           format: exportSettings.format,
           quality: exportSettings.quality,
         })
