@@ -3,6 +3,7 @@ import { Stage, Layer, Image, Transformer, Text, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { loadImageFromDataUrl } from '@/utils/image'
+import { scaleToFit } from '@/utils/cn'
 
 function useImageLoader(dataUrl: string | null): HTMLImageElement | null {
   const [img, setImg] = useState<HTMLImageElement | null>(null)
@@ -15,8 +16,9 @@ function useImageLoader(dataUrl: string | null): HTMLImageElement | null {
   return img
 }
 
-function LayerImage({ layer, onSelect, onDragEnd, onTransformEnd, registerShape }: {
+function LayerImage({ layer, isCropping, onSelect, onDragEnd, onTransformEnd, registerShape }: {
   layer: import('@/types').WatermarkImage
+  isCropping: boolean
   onSelect: (id: string) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onTransformEnd: (id: string) => void
@@ -38,17 +40,19 @@ function LayerImage({ layer, onSelect, onDragEnd, onTransformEnd, registerShape 
       opacity={layer.opacity}
       visible={layer.visible}
       draggable
+      listening={!isCropping}
       {...(layer.cropRect ? { crop: layer.cropRect } : {})}
-      onClick={() => onSelect(layer.id)}
-      onTap={() => onSelect(layer.id)}
+      onClick={() => !isCropping && onSelect(layer.id)}
+      onTap={() => !isCropping && onSelect(layer.id)}
       onDragEnd={(e) => onDragEnd(layer.id, e.target.x(), e.target.y())}
       onTransformEnd={() => onTransformEnd(layer.id)}
     />
   ) : null
 }
 
-function LayerText({ layer, onSelect, onDragEnd, onTransformEnd, registerShape }: {
+function LayerText({ layer, isCropping, onSelect, onDragEnd, onTransformEnd, registerShape }: {
   layer: import('@/types').WatermarkText
+  isCropping: boolean
   onSelect: (id: string) => void
   onDragEnd: (id: string, x: number, y: number) => void
   onTransformEnd: (id: string) => void
@@ -67,9 +71,10 @@ function LayerText({ layer, onSelect, onDragEnd, onTransformEnd, registerShape }
       opacity={layer.opacity}
       rotation={layer.rotation}
       draggable
+      listening={!isCropping}
       visible={layer.visible}
-      onClick={() => onSelect(layer.id)}
-      onTap={() => onSelect(layer.id)}
+      onClick={() => !isCropping && onSelect(layer.id)}
+      onTap={() => !isCropping && onSelect(layer.id)}
       onDragEnd={(e) => onDragEnd(layer.id, e.target.x(), e.target.y())}
       onTransformEnd={() => onTransformEnd(layer.id)}
     />
@@ -108,6 +113,8 @@ export default function WatermarkCanvas() {
     currentY: number
   } | null>(null)
 
+  const [imageFit, setImageFit] = useState({ scale: 1, offsetX: 0, offsetY: 0, displayW: 0, displayH: 0 })
+
   useEffect(() => {
     const updateSize = () => {
       if (!containerRef.current) return
@@ -125,9 +132,20 @@ export default function WatermarkCanvas() {
 
   useEffect(() => {
     if (bgImage) {
-      setBaseImageSize({ width: bgImage.naturalWidth, height: bgImage.naturalHeight })
+      const nw = bgImage.naturalWidth
+      const nh = bgImage.naturalHeight
+      setBaseImageSize({ width: nw, height: nh })
+      const { width: dw, height: dh } = scaleToFit(nw, nh, dimensions.width * 0.9, dimensions.height * 0.9)
+      const s = dw / nw
+      setImageFit({
+        scale: s,
+        offsetX: (dimensions.width - dw) / 2,
+        offsetY: (dimensions.height - dh) / 2,
+        displayW: dw,
+        displayH: dh,
+      })
     }
-  }, [bgImage, setBaseImageSize])
+  }, [bgImage, setBaseImageSize, dimensions])
 
   useEffect(() => {
     if (!transformerRef.current) return
@@ -146,8 +164,55 @@ export default function WatermarkCanvas() {
     } else {
       cropTransformerRef.current.nodes([])
     }
-    cropTransformerRef.current.getLayer()?.batchDraw()
-  }, [isCropping, crop.rect])
+  }, [isCropping, crop.rect, layers])
+
+  const getStagePointer = useCallback((clientX: number, clientY: number) => {
+    const stage = stageRef.current
+    if (!stage) return null
+    const rect = stage.container().getBoundingClientRect()
+    return { x: clientX - rect.left, y: clientY - rect.top }
+  }, [])
+
+  const handleCropPointerDown = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isCropping) return
+      if (crop.rect) return
+      const pos = getStagePointer(clientX, clientY)
+      if (!pos) return
+      setCropDraw({
+        active: true,
+        startX: pos.x,
+        startY: pos.y,
+        currentX: pos.x,
+        currentY: pos.y,
+      })
+    },
+    [isCropping, crop.rect, getStagePointer]
+  )
+
+  const handleCropPointerMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!cropDraw?.active) return
+      const pos = getStagePointer(clientX, clientY)
+      if (!pos) return
+      setCropDraw((prev) =>
+        prev ? { ...prev, currentX: pos.x, currentY: pos.y } : prev
+      )
+    },
+    [cropDraw?.active, getStagePointer]
+  )
+
+  const handleCropPointerUp = useCallback(() => {
+    if (!cropDraw?.active) return
+    const x = Math.min(cropDraw.startX, cropDraw.currentX)
+    const y = Math.min(cropDraw.startY, cropDraw.currentY)
+    const w = Math.abs(cropDraw.currentX - cropDraw.startX)
+    const h = Math.abs(cropDraw.currentY - cropDraw.startY)
+    if (w > 5 && h > 5) {
+      updateCropRect({ x, y, width: w, height: h })
+    }
+    setCropDraw(null)
+  }, [cropDraw, updateCropRect])
 
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -232,51 +297,6 @@ export default function WatermarkCanvas() {
     node.getLayer()?.batchDraw()
   }, [updateCropRect])
 
-  const handleMouseDown = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-      if (!isCropping) return
-      if (crop.rect) return
-      const stage = e.target.getStage()
-      if (!stage) return
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-      setCropDraw({
-        active: true,
-        startX: pos.x,
-        startY: pos.y,
-        currentX: pos.x,
-        currentY: pos.y,
-      })
-    },
-    [isCropping, crop.rect]
-  )
-
-  const handleMouseMove = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-      if (!cropDraw?.active) return
-      const stage = e.target.getStage()
-      if (!stage) return
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-      setCropDraw((prev) =>
-        prev ? { ...prev, currentX: pos.x, currentY: pos.y } : prev
-      )
-    },
-    [cropDraw?.active]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    if (!cropDraw?.active) return
-    const x = Math.min(cropDraw.startX, cropDraw.currentX)
-    const y = Math.min(cropDraw.startY, cropDraw.currentY)
-    const w = Math.abs(cropDraw.currentX - cropDraw.startX)
-    const h = Math.abs(cropDraw.currentY - cropDraw.startY)
-    if (w > 5 && h > 5) {
-      updateCropRect({ x, y, width: w, height: h })
-    }
-    setCropDraw(null)
-  }, [cropDraw, updateCropRect])
-
   const displayCropRect = useMemo(() => {
     if (cropDraw?.active) {
       const x = Math.min(cropDraw.startX, cropDraw.currentX)
@@ -309,33 +329,53 @@ export default function WatermarkCanvas() {
   return (
     <div
       ref={containerRef}
-      className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-lg"
       style={{
         backgroundImage: 'repeating-conic-gradient(#e2e8f0 0% 25%, transparent 0% 50%)',
         backgroundSize: '20px 20px',
       }}
     >
+      {isCropping && (
+        <div
+          className="absolute inset-0 z-10 cursor-crosshair"
+          onMouseDown={(e) => handleCropPointerDown(e.clientX, e.clientY)}
+          onMouseMove={(e) => handleCropPointerMove(e.clientX, e.clientY)}
+          onMouseUp={handleCropPointerUp}
+          onTouchStart={(e) => {
+            const t = e.touches[0]
+            handleCropPointerDown(t.clientX, t.clientY)
+          }}
+          onTouchMove={(e) => {
+            const t = e.touches[0]
+            handleCropPointerMove(t.clientX, t.clientY)
+          }}
+          onTouchEnd={handleCropPointerUp}
+        />
+      )}
       <Stage
         ref={stageRef}
         width={dimensions.width}
         height={dimensions.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
       >
         <Layer>
-          {bgImage && <Image image={bgImage} width={dimensions.width} height={dimensions.height} />}
+          {bgImage && (
+            <Image
+              image={bgImage}
+              x={imageFit.offsetX}
+              y={imageFit.offsetY}
+              width={imageFit.displayW}
+              height={imageFit.displayH}
+            />
+          )}
 
           {layers.map((layer) =>
             layer.type === 'image' ? (
               <LayerImage
                 key={layer.id}
                 layer={layer}
+                isCropping={isCropping}
                 onSelect={selectLayer}
                 onDragEnd={handleDragEnd}
                 onTransformEnd={handleTransformEnd}
@@ -345,6 +385,7 @@ export default function WatermarkCanvas() {
               <LayerText
                 key={layer.id}
                 layer={layer}
+                isCropping={isCropping}
                 onSelect={selectLayer}
                 onDragEnd={handleDragEnd}
                 onTransformEnd={handleTransformEnd}

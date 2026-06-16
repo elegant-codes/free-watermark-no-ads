@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Undo2, Redo2, PanelRightOpen, PanelRightClose, Image as ImageIcon } from 'lucide-react'
+import { Undo2, Redo2, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useMediaQuery'
@@ -9,6 +9,7 @@ import UploadButton from '@/components/toolbar/UploadButton'
 import ThemeToggle from '@/components/toolbar/ThemeToggle'
 import ControlPanel from '@/components/toolbar/ControlPanel'
 import BatchDialog from '@/components/toolbar/BatchDialog'
+import ExportDialog from '@/components/toolbar/ExportDialog'
 
 function Header() {
   const undo = useWatermarkStore((s) => s.undo)
@@ -17,7 +18,7 @@ function Header() {
   const history = useWatermarkStore((s) => s.history)
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background px-4 safe-top">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-4 safe-top">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-5 w-5 text-primary" />
@@ -33,6 +34,7 @@ function Header() {
           onClick={undo}
           disabled={historyIndex <= 0}
           className="h-9 w-9"
+          title="Undo (Cmd+Z)"
         >
           <Undo2 className="h-4 w-4" />
         </Button>
@@ -42,9 +44,11 @@ function Header() {
           onClick={redo}
           disabled={historyIndex >= history.length - 1}
           className="h-9 w-9"
+          title="Redo (Cmd+Shift+Z)"
         >
           <Redo2 className="h-4 w-4" />
         </Button>
+        <ExportDialog />
         <BatchDialog />
         <UploadButton />
         <ThemeToggle />
@@ -55,41 +59,40 @@ function Header() {
 
 function MobileBottomSheet() {
   const [expanded, setExpanded] = useState(false)
-  const isOpen = useWatermarkStore((s) => s.isControlPanelOpen)
-  const setPanelOpen = useCallback(
-    (v: boolean) => useWatermarkStore.getState().isControlPanelOpen !== v && useWatermarkStore.getState().toggleControlPanel(),
-    []
-  )
   const layers = useWatermarkStore((s) => s.layers)
   const isCropping = useWatermarkStore((s) => s.crop.isCropping)
   const sheetRef = useRef<HTMLDivElement>(null)
   const startY = useRef(0)
+  const [dragOffset, setDragOffset] = useState(0)
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startY.current = e.touches[0].clientY
   }, [])
 
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const dy = e.touches[0].clientY - startY.current
+      setDragOffset(Math.max(0, dy))
+    },
+    []
+  )
+
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       const dy = e.changedTouches[0].clientY - startY.current
-      if (Math.abs(dy) > 50) {
-        setExpanded(dy < 0)
-        setPanelOpen(dy < 0)
+      if (dy > 100) {
+        setExpanded(false)
       }
+      setDragOffset(0)
     },
-    [setPanelOpen]
+    []
   )
-
-  useEffect(() => {
-    if (isOpen) setExpanded(true)
-  }, [isOpen])
 
   useEffect(() => {
     if (layers.length > 0 && !expanded) {
       setExpanded(true)
-      setPanelOpen(true)
     }
-  }, [layers.length, expanded, setPanelOpen])
+  }, [layers.length])
 
   const hasLayers = layers.length > 0
   const layerCount = layers.length
@@ -98,49 +101,64 @@ function MobileBottomSheet() {
     <>
       {!expanded && (
         <button
-          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-lg"
-          onClick={() => {
-            setExpanded(true)
-            setPanelOpen(true)
-          }}
+          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-lg active:scale-95 transition-transform"
+          onClick={() => setExpanded(true)}
         >
-          <PanelRightOpen className="h-4 w-4" />
-          {hasLayers ? `${layerCount} watermark${layerCount > 1 ? 's' : ''}` : 'Controls'}
+          <ImageIcon className="h-4 w-4" />
+          {hasLayers ? `${layerCount} watermark${layerCount > 1 ? 's' : ''}` : 'Open Controls'}
         </button>
       )}
       {expanded && (
         <div
-          className="fixed inset-0 z-40 bg-black/20"
-          onClick={() => {
-            setExpanded(false)
-            setPanelOpen(false)
-          }}
+          className="fixed inset-0 z-40 bg-black/30"
+          onClick={() => setExpanded(false)}
         />
       )}
       <div
         ref={sheetRef}
-        className={`fixed bottom-0 left-0 right-0 z-50 transform transition-transform duration-300 ease-out ${
-          expanded ? 'translate-y-0' : 'translate-y-full'
-        }`}
+        className="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
+        style={{
+          transform: expanded
+            ? `translateY(${dragOffset}px)`
+            : 'translateY(100%)',
+        }}
       >
-        <div className="rounded-t-xl border bg-background shadow-xl safe-bottom">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <span className="text-sm font-medium">
-              Controls
-              {isCropping && <span className="ml-2 text-xs text-blue-500">(Crop mode)</span>}
-            </span>
+        <div className="rounded-t-2xl border bg-background shadow-2xl safe-bottom">
+          <div className="flex items-center justify-center py-2">
             <div
-              className="mx-auto h-1.5 w-10 cursor-grab rounded-full bg-muted-foreground/30"
+              className="h-1.5 w-12 cursor-grab rounded-full bg-muted-foreground/30 active:cursor-grabbing"
               onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              onClick={() => {
-                setExpanded(false)
-                setPanelOpen(false)
+              onMouseDown={(e) => {
+                startY.current = e.clientY
+                const onMove = (me: MouseEvent) => {
+                  setDragOffset(Math.max(0, me.clientY - startY.current))
+                }
+                const onUp = (ue: MouseEvent) => {
+                  if (ue.clientY - startY.current > 100) setExpanded(false)
+                  setDragOffset(0)
+                  document.removeEventListener('mousemove', onMove)
+                  document.removeEventListener('mouseup', onUp)
+                }
+                document.addEventListener('mousemove', onMove)
+                document.addEventListener('mouseup', onUp)
               }}
             />
-            <div className="w-12" />
           </div>
-          <div className="max-h-[50vh] overflow-y-auto">
+          <div className="flex items-center justify-between px-4 pb-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              Controls
+              {isCropping && <span className="ml-2 text-blue-500">(Crop mode)</span>}
+            </span>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setExpanded(false)}
+            >
+              Done
+            </button>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto px-1 pb-4">
             <ControlPanel />
           </div>
         </div>
@@ -150,39 +168,15 @@ function MobileBottomSheet() {
 }
 
 function DesktopSidebar() {
-  const isOpen = useWatermarkStore((s) => s.isControlPanelOpen)
-  const togglePanel = useWatermarkStore((s) => s.toggleControlPanel)
-
   return (
-    <>
-      {!isOpen && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={togglePanel}
-          className="absolute right-2 top-16 z-10 h-8 w-8"
-        >
-          <PanelRightOpen className="h-4 w-4" />
-        </Button>
-      )}
-      <div
-        className={`border-l bg-background transition-all duration-300 ${
-          isOpen ? 'w-72' : 'w-0 overflow-hidden'
-        }`}
-      >
-        <div className="flex h-full w-72 flex-col">
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <span className="text-sm font-medium">Controls</span>
-            <Button variant="ghost" size="icon" onClick={togglePanel} className="h-7 w-7">
-              <PanelRightClose className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <ControlPanel />
-          </div>
-        </div>
+    <div className="flex w-72 shrink-0 flex-col border-l bg-background">
+      <div className="border-b px-3 py-2">
+        <span className="text-sm font-medium">Controls</span>
       </div>
-    </>
+      <div className="flex-1 overflow-y-auto">
+        <ControlPanel />
+      </div>
+    </div>
   )
 }
 
@@ -219,8 +213,8 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <Header />
-      <div className="relative flex flex-1 overflow-hidden">
-        <main className="flex-1 p-3">
+      <div className="flex flex-1 overflow-hidden">
+        <main className="flex min-w-0 flex-1 p-3">
           <WatermarkCanvas />
         </main>
         {isMobile ? <MobileBottomSheet /> : <DesktopSidebar />}
