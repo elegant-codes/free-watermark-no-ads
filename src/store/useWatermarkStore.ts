@@ -130,13 +130,12 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
     const state = get()
     const cw = state.canvasSize.width
     const ch = state.canvasSize.height
-    const logoW = Math.min(300, Math.round(cw * 0.25))
-    const logoH = Math.round(logoW * 0.75)
+    const size = Math.min(300, Math.round(Math.min(cw, ch) * 0.25))
     const rect = rectOverride ?? {
-      x: Math.round((cw - logoW) / 2),
-      y: Math.round((ch - logoH) / 2),
-      width: logoW,
-      height: logoH,
+      x: Math.round((cw - size) / 2),
+      y: Math.round((ch - size) / 2),
+      width: size,
+      height: size,
     }
     const newLayer: WatermarkImage = {
       id: generateId(),
