@@ -53,7 +53,7 @@ interface AppState {
   clearBaseImage: () => void
 
   // Actions: Watermark image
-  addImageWatermark: (dataUrl: string, file: File) => void
+  addImageWatermark: (dataUrl: string, file: File, rectOverride?: Rect) => void
   updateWatermarkPosition: (id: string, x: number, y: number) => void
   updateWatermarkTransform: (id: string, updates: Partial<WatermarkImage>) => void
   removeLayer: (id: string) => void

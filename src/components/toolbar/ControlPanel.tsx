@@ -27,9 +27,25 @@ function ImageTab() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      if (typeof ev.target?.result === 'string') {
-        addImageWatermark(ev.target.result, file)
+      const result = ev.target?.result
+      if (typeof result !== 'string') return
+      const img = document.createElement('img')
+      img.onload = () => {
+        const cw = useWatermarkStore.getState().canvasSize.width
+        const ch = useWatermarkStore.getState().canvasSize.height
+        const maxW = Math.min(300, Math.round(cw * 0.25))
+        const maxH = Math.round(ch * 0.25)
+        const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight)
+        const logoW = Math.round(img.naturalWidth * scale)
+        const logoH = Math.round(img.naturalHeight * scale)
+        addImageWatermark(result, file, {
+          x: Math.round((cw - logoW) / 2),
+          y: Math.round((ch - logoH) / 2),
+          width: logoW,
+          height: logoH,
+        })
       }
+      img.src = result
     }
     reader.readAsDataURL(file)
   }
