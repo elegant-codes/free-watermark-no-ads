@@ -1,8 +1,81 @@
-import { useEffect, useRef, useState } from 'react'
-import { Stage, Layer, Image, Transformer, Text, Rect } from 'react-konva'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Stage, Layer, Image, Transformer, Text, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { loadImageFromDataUrl } from '@/utils/image'
+
+function useImageLoader(dataUrl: string | null): HTMLImageElement | null {
+  const [img, setImg] = useState<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!dataUrl) { setImg(null); return }
+    let cancelled = false
+    loadImageFromDataUrl(dataUrl).then((i) => { if (!cancelled) setImg(i) })
+    return () => { cancelled = true }
+  }, [dataUrl])
+  return img
+}
+
+function LayerImage({ layer, onSelect, onDragEnd, onTransformEnd, registerShape }: {
+  layer: import('@/types').WatermarkImage
+  onSelect: (id: string) => void
+  onDragEnd: (id: string, x: number, y: number) => void
+  onTransformEnd: (id: string) => void
+  registerShape: (id: string, node: Konva.Shape | null) => void
+}) {
+  const img = useImageLoader(layer.dataUrl)
+
+  return img ? (
+    <Image
+      ref={(node) => registerShape(layer.id, node)}
+      name={layer.id}
+      image={img}
+      x={layer.rect.x}
+      y={layer.rect.y}
+      width={layer.rect.width}
+      height={layer.rect.height}
+      scaleX={layer.scale}
+      scaleY={layer.scale}
+      rotation={layer.rotation}
+      opacity={layer.opacity}
+      visible={layer.visible}
+      draggable
+      {...(layer.cropRect ? { crop: layer.cropRect } : {})}
+      onClick={() => onSelect(layer.id)}
+      onTap={() => onSelect(layer.id)}
+      onDragEnd={(e) => onDragEnd(layer.id, e.target.x(), e.target.y())}
+      onTransformEnd={() => onTransformEnd(layer.id)}
+    />
+  ) : null
+}
+
+function LayerText({ layer, onSelect, onDragEnd, onTransformEnd, registerShape }: {
+  layer: import('@/types').WatermarkText
+  onSelect: (id: string) => void
+  onDragEnd: (id: string, x: number, y: number) => void
+  onTransformEnd: (id: string) => void
+  registerShape: (id: string, node: Konva.Shape | null) => void
+}) {
+  return (
+    <Text
+      ref={(node) => registerShape(layer.id, node)}
+      name={layer.id}
+      text={layer.text}
+      x={layer.position.x}
+      y={layer.position.y}
+      fontSize={layer.fontSize}
+      fontFamily={layer.fontFamily}
+      fill={layer.color}
+      opacity={layer.opacity}
+      rotation={layer.rotation}
+      draggable
+      visible={layer.visible}
+      onClick={() => onSelect(layer.id)}
+      onTap={() => onSelect(layer.id)}
+      onDragEnd={(e) => onDragEnd(layer.id, e.target.x(), e.target.y())}
+      onTransformEnd={() => onTransformEnd(layer.id)}
+    />
+  )
+}
 
 export default function WatermarkCanvas() {
   const baseImage = useWatermarkStore((s) => s.baseImage)
@@ -15,14 +88,24 @@ export default function WatermarkCanvas() {
   const crop = useWatermarkStore((s) => s.crop)
   const updateCropRect = useWatermarkStore((s) => s.updateCropRect)
   const pushHistory = useWatermarkStore((s) => s.pushHistory)
+  const setBaseImageSize = useWatermarkStore((s) => s.setBaseImageSize)
+  const isCropping = useWatermarkStore((s) => s.crop.isCropping)
+
+  const bgImage = useImageLoader(baseImage)
 
   const stageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const shapeRefs = useRef<Map<string, Konva.Shape>>(new Map())
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null)
-  const watermarkImages = useRef<Map<string, HTMLImageElement>>(new Map())
+
+  const [cropDraw, setCropDraw] = useState<{
+    active: boolean
+    startX: number
+    startY: number
+    currentX: number
+    currentY: number
+  } | null>(null)
 
   useEffect(() => {
     const updateSize = () => {
@@ -30,39 +113,20 @@ export default function WatermarkCanvas() {
       const rect = containerRef.current.getBoundingClientRect()
       setDimensions({
         width: Math.floor(rect.width),
-        height: Math.floor(Math.max(rect.height, 400)),
+        height: Math.floor(Math.max(rect.height, 300)),
       })
     }
     updateSize()
-    window.addEventListener('resize', updateSize)
-    return () => window.removeEventListener('resize', updateSize)
+    const ro = new ResizeObserver(updateSize)
+    if (containerRef.current) ro.observe(containerRef.current)
+    return () => ro.disconnect()
   }, [])
 
   useEffect(() => {
-    if (!baseImage) return
-    loadImageFromDataUrl(baseImage).then((img) => {
-      setBgImage(img)
-      useWatermarkStore.getState().setBaseImageSize({
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      })
-    })
-  }, [baseImage])
-
-  useEffect(() => {
-    layers
-      .filter((l): l is import('@/types').WatermarkImage => l.type === 'image')
-      .forEach((layer) => {
-        if (!watermarkImages.current.has(layer.id)) {
-          loadImageFromDataUrl(layer.dataUrl).then((img) => {
-            watermarkImages.current.set(layer.id, img)
-            forceUpdate({})
-          })
-        }
-      })
-  }, [layers])
-
-  const [, forceUpdate] = useState({})
+    if (bgImage) {
+      setBaseImageSize({ width: bgImage.naturalWidth, height: bgImage.naturalHeight })
+    }
+  }, [bgImage, setBaseImageSize])
 
   useEffect(() => {
     if (!transformerRef.current) return
@@ -72,59 +136,111 @@ export default function WatermarkCanvas() {
       transformerRef.current.nodes([])
     }
     transformerRef.current.getLayer()?.batchDraw()
-  }, [selectedLayerId])
+  }, [selectedLayerId, layers])
 
-  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if (e.target === e.target.getStage()) {
-      selectLayer(null)
-    }
-  }
+  const handleStageClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (e.target === e.target.getStage()) {
+        selectLayer(null)
+      }
+    },
+    [selectLayer]
+  )
 
-  const registerShape = (id: string, node: Konva.Shape | null) => {
+  const registerShape = useCallback((id: string, node: Konva.Shape | null) => {
     if (node) shapeRefs.current.set(id, node)
     else shapeRefs.current.delete(id)
-  }
+  }, [])
 
-  const handleDragEnd = (id: string, layerType: string, e: Konva.KonvaEventObject<DragEvent>) => {
-    if (layerType === 'image') {
-      updatePosition(id, e.target.x(), e.target.y())
-    } else {
-      updateTextWatermark(id, { position: { x: e.target.x(), y: e.target.y() } })
+  const handleDragEnd = useCallback(
+    (id: string, x: number, y: number) => {
+      updatePosition(id, x, y)
+      pushHistory()
+    },
+    [updatePosition, pushHistory]
+  )
+
+  const handleTransformEnd = useCallback(
+    (id: string) => {
+      const layer = layers.find((l) => l.id === id)
+      if (!layer) return
+      if (layer.type === 'image') {
+        const node = shapeRefs.current.get(id) as Konva.Image | undefined
+        if (!node) return
+        updatePosition(id, node.x(), node.y())
+        updateTransform(id, {
+          rect: { x: node.x(), y: node.y(), width: Math.max(10, node.width() * node.scaleX()), height: Math.max(10, node.height() * node.scaleY()) },
+          scale: 1,
+          rotation: node.rotation(),
+        })
+      } else {
+        const node = shapeRefs.current.get(id) as Konva.Text | undefined
+        if (!node) return
+        updateTextWatermark(id, {
+          position: { x: node.x(), y: node.y() },
+          rotation: node.rotation(),
+          fontSize: Math.max(8, node.fontSize() * node.scaleX()),
+        })
+        node.scaleX(1)
+        node.scaleY(1)
+      }
+      pushHistory()
+    },
+    [layers, updatePosition, updateTransform, updateTextWatermark, pushHistory]
+  )
+
+  const handleMouseDown = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (!isCropping) return
+      const stage = e.target.getStage()
+      if (!stage) return
+      const pos = stage.getPointerPosition()
+      if (!pos) return
+      setCropDraw({
+        active: true,
+        startX: pos.x,
+        startY: pos.y,
+        currentX: pos.x,
+        currentY: pos.y,
+      })
+    },
+    [isCropping]
+  )
+
+  const handleMouseMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (!cropDraw?.active) return
+      const stage = e.target.getStage()
+      if (!stage) return
+      const pos = stage.getPointerPosition()
+      if (!pos) return
+      setCropDraw((prev) =>
+        prev ? { ...prev, currentX: pos.x, currentY: pos.y } : prev
+      )
+    },
+    [cropDraw?.active]
+  )
+
+  const handleMouseUp = useCallback(() => {
+    if (!cropDraw?.active) return
+    const x = Math.min(cropDraw.startX, cropDraw.currentX)
+    const y = Math.min(cropDraw.startY, cropDraw.currentY)
+    const w = Math.abs(cropDraw.currentX - cropDraw.startX)
+    const h = Math.abs(cropDraw.currentY - cropDraw.startY)
+    if (w > 5 && h > 5) {
+      updateCropRect({ x, y, width: w, height: h })
     }
-    pushHistory()
-  }
+    setCropDraw(null)
+  }, [cropDraw, updateCropRect])
 
-  const handleTransformEnd = (layer: import('@/types').WatermarkImage) => {
-    const node = shapeRefs.current.get(layer.id) as Konva.Image | undefined
-    if (!node) return
-    const scaleX = node.scaleX()
-    const scaleY = node.scaleY()
-    updatePosition(layer.id, node.x(), node.y())
-    updateTransform(layer.id, {
-      rect: {
-        x: node.x(),
-        y: node.y(),
-        width: Math.max(10, node.width() * scaleX),
-        height: Math.max(10, node.height() * scaleY),
-      },
-      scale: 1,
-      rotation: node.rotation(),
-    })
-    pushHistory()
-  }
-
-  const handleTextTransformEnd = (layer: import('@/types').WatermarkText) => {
-    const node = shapeRefs.current.get(layer.id) as Konva.Text | undefined
-    if (!node) return
-    updateTextWatermark(layer.id, {
-      position: { x: node.x(), y: node.y() },
-      rotation: node.rotation(),
-      fontSize: Math.max(8, node.fontSize() * node.scaleX()),
-    })
-    node.scaleX(1)
-    node.scaleY(1)
-    pushHistory()
-  }
+  const cropRect = useMemo(() => {
+    if (!cropDraw?.active) return crop.rect
+    const x = Math.min(cropDraw.startX, cropDraw.currentX)
+    const y = Math.min(cropDraw.startY, cropDraw.currentY)
+    const w = Math.abs(cropDraw.currentX - cropDraw.startX)
+    const h = Math.abs(cropDraw.currentY - cropDraw.startY)
+    return { x, y, width: w, height: h } as import('@/types').Rect
+  }, [cropDraw, crop.rect])
 
   if (!baseImage) {
     return (
@@ -159,104 +275,67 @@ export default function WatermarkCanvas() {
         height={dimensions.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
         className="max-h-full max-w-full"
       >
         <Layer>
-          {bgImage && <Image image={bgImage} />}
+          {bgImage && (
+            <Image
+              image={bgImage}
+              width={dimensions.width}
+              height={dimensions.height}
+              fill="contain"
+            />
+          )}
 
-          {layers.map((layer) => {
-            if (layer.type === 'image') {
-              const img = watermarkImages.current.get(layer.id)
-              if (!img) return null
-              const cropRect = layer.cropRect
-              return (
-                <Image
-                  key={layer.id}
-                  ref={(node) => registerShape(layer.id, node)}
-                  name={layer.id}
-                  image={img}
-                  x={layer.rect.x}
-                  y={layer.rect.y}
-                  width={layer.rect.width}
-                  height={layer.rect.height}
-                  scaleX={layer.scale}
-                  scaleY={layer.scale}
-                  rotation={layer.rotation}
-                  opacity={layer.opacity}
-                  visible={layer.visible}
-                  draggable
-                  {...(cropRect
-                    ? {
-                        crop: {
-                          x: cropRect.x,
-                          y: cropRect.y,
-                          width: cropRect.width,
-                          height: cropRect.height,
-                        },
-                      }
-                    : {})}
-                  onClick={() => selectLayer(layer.id)}
-                  onTap={() => selectLayer(layer.id)}
-                  onDragEnd={(e) => handleDragEnd(layer.id, 'image', e)}
-                  onTransformEnd={() => handleTransformEnd(layer)}
-                />
-              )
-            }
+          {layers.map((layer) =>
+            layer.type === 'image' ? (
+              <LayerImage
+                key={layer.id}
+                layer={layer}
+                onSelect={selectLayer}
+                onDragEnd={handleDragEnd}
+                onTransformEnd={handleTransformEnd}
+                registerShape={registerShape}
+              />
+            ) : (
+              <LayerText
+                key={layer.id}
+                layer={layer}
+                onSelect={selectLayer}
+                onDragEnd={handleDragEnd}
+                onTransformEnd={handleTransformEnd}
+                registerShape={registerShape}
+              />
+            )
+          )}
 
-            if (layer.type === 'text') {
-              return (
-                <Text
-                  key={layer.id}
-                  ref={(node) => registerShape(layer.id, node)}
-                  name={layer.id}
-                  text={layer.text}
-                  x={layer.position.x}
-                  y={layer.position.y}
-                  fontSize={layer.fontSize}
-                  fontFamily={layer.fontFamily}
-                  fill={layer.color}
-                  opacity={layer.opacity}
-                  rotation={layer.rotation}
-                  draggable
-                  visible={layer.visible}
-                  onClick={() => selectLayer(layer.id)}
-                  onTap={() => selectLayer(layer.id)}
-                  onDragEnd={(e) => handleDragEnd(layer.id, 'text', e)}
-                  onTransformEnd={() => handleTextTransformEnd(layer)}
-                />
-              )
-            }
-            return null
-          })}
-
-          {crop.isCropping && (
+          {cropRect && isCropping && (
             <Rect
-              x={crop.rect?.x ?? 0}
-              y={crop.rect?.y ?? 0}
-              width={crop.rect?.width ?? 100}
-              height={crop.rect?.height ?? 100}
-              stroke="hsl(var(--primary))"
+              x={cropRect.x}
+              y={cropRect.y}
+              width={cropRect.width}
+              height={cropRect.height}
+              stroke="#3b82f6"
               strokeWidth={2}
               fill="rgba(59, 130, 246, 0.1)"
-              draggable
-              onDragEnd={(e) => {
-                updateCropRect({
-                  x: e.target.x(),
-                  y: e.target.y(),
-                  width: crop.rect?.width ?? 100,
-                  height: crop.rect?.height ?? 100,
-                })
-              }}
-              onTransformEnd={(e) => {
-                const node = e.target
-                updateCropRect({
-                  x: node.x(),
-                  y: node.y(),
-                  width: node.width() * node.scaleX(),
-                  height: node.height() * node.scaleY(),
-                })
-              }}
+              dash={[6, 3]}
+              draggable={false}
             />
+          )}
+
+          {(cropRect && isCropping) && (
+            <>
+              <Line points={[0, cropRect.y, dimensions.width, cropRect.y]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+              <Line points={[0, cropRect.y + cropRect.height, dimensions.width, cropRect.y + cropRect.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+              <Line points={[cropRect.x, 0, cropRect.x, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+              <Line points={[cropRect.x + cropRect.width, 0, cropRect.x + cropRect.width, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+            </>
           )}
 
           <Transformer
