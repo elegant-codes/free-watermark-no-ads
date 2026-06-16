@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { Undo2, Redo2, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
@@ -57,113 +57,21 @@ function Header() {
   )
 }
 
-function MobileBottomSheet() {
-  const [expanded, setExpanded] = useState(false)
-  const layers = useWatermarkStore((s) => s.layers)
+function MobileFixedBar() {
   const isCropping = useWatermarkStore((s) => s.crop.isCropping)
-  const sheetRef = useRef<HTMLDivElement>(null)
-  const startY = useRef(0)
-  const [dragOffset, setDragOffset] = useState(0)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    startY.current = e.touches[0].clientY
-  }, [])
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      const dy = e.touches[0].clientY - startY.current
-      setDragOffset(Math.max(0, dy))
-    },
-    []
-  )
-
-  const handleTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      const dy = e.changedTouches[0].clientY - startY.current
-      if (dy > 100) {
-        setExpanded(false)
-      }
-      setDragOffset(0)
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (layers.length > 0 && !expanded) {
-      setExpanded(true)
-    }
-  }, [layers.length])
-
-  const hasLayers = layers.length > 0
-  const layerCount = layers.length
 
   return (
-    <>
-      {!expanded && (
-        <button
-          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-lg active:scale-95 transition-transform"
-          onClick={() => setExpanded(true)}
-        >
-          <ImageIcon className="h-4 w-4" />
-          {hasLayers ? `${layerCount} watermark${layerCount > 1 ? 's' : ''}` : 'Open Controls'}
-        </button>
-      )}
-      {expanded && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30"
-          onClick={() => setExpanded(false)}
-        />
-      )}
-      <div
-        ref={sheetRef}
-        className="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
-        style={{
-          transform: expanded
-            ? `translateY(${dragOffset}px)`
-            : 'translateY(100%)',
-        }}
-      >
-        <div className="rounded-t-2xl border bg-background shadow-2xl safe-bottom">
-          <div className="flex items-center justify-center py-2">
-            <div
-              className="h-1.5 w-12 cursor-grab rounded-full bg-muted-foreground/30 active:cursor-grabbing"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={(e) => {
-                startY.current = e.clientY
-                const onMove = (me: MouseEvent) => {
-                  setDragOffset(Math.max(0, me.clientY - startY.current))
-                }
-                const onUp = (ue: MouseEvent) => {
-                  if (ue.clientY - startY.current > 100) setExpanded(false)
-                  setDragOffset(0)
-                  document.removeEventListener('mousemove', onMove)
-                  document.removeEventListener('mouseup', onUp)
-                }
-                document.addEventListener('mousemove', onMove)
-                document.addEventListener('mouseup', onUp)
-              }}
-            />
-          </div>
-          <div className="flex items-center justify-between px-4 pb-1">
-            <span className="text-xs font-medium text-muted-foreground">
-              Controls
-              {isCropping && <span className="ml-2 text-blue-500">(Crop mode)</span>}
-            </span>
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setExpanded(false)}
-            >
-              Done
-            </button>
-          </div>
-          <div className="max-h-[55vh] overflow-y-auto px-1 pb-4">
-            <ControlPanel />
-          </div>
-        </div>
+    <div className="flex h-[38vh] shrink-0 flex-col border-t bg-background safe-bottom">
+      <div className="flex items-center justify-between border-b px-3 py-1.5">
+        <span className="text-xs font-medium">
+          Controls
+          {isCropping && <span className="ml-2 text-xs text-blue-500">(Crop mode)</span>}
+        </span>
       </div>
-    </>
+      <div className="flex-1 overflow-y-auto px-1 pb-2">
+        <ControlPanel />
+      </div>
+    </div>
   )
 }
 
@@ -213,12 +121,21 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <Header />
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex min-w-0 flex-1 p-3">
-          <WatermarkCanvas />
-        </main>
-        {isMobile ? <MobileBottomSheet /> : <DesktopSidebar />}
-      </div>
+      {isMobile ? (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <main className="flex min-w-0 flex-1 p-3">
+            <WatermarkCanvas />
+          </main>
+          <MobileFixedBar />
+        </div>
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex min-w-0 flex-1 p-3">
+            <WatermarkCanvas />
+          </main>
+          <DesktopSidebar />
+        </div>
+      )}
     </div>
   )
 }
