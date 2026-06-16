@@ -135,10 +135,10 @@ export default function WatermarkCanvas() {
     const updateSize = () => {
       if (!containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
-      setDimensions({
-        width: Math.floor(rect.width),
-        height: Math.floor(Math.max(rect.height, 300)),
-      })
+      const w = Math.floor(rect.width)
+      const h = Math.floor(Math.max(rect.height, 300))
+      setDimensions({ width: w, height: h })
+      useWatermarkStore.getState().setCanvasSize({ width: w, height: h })
     }
     updateSize()
     const ro = new ResizeObserver(updateSize)

@@ -31,6 +31,7 @@ interface AppState {
   crop: CropState
 
   // UI state
+  canvasSize: { width: number; height: number }
   activeTab: ActiveTab
   isControlPanelOpen: boolean
   isMobile: boolean
@@ -76,6 +77,7 @@ interface AppState {
 
   // Actions: UI
   setActiveTab: (tab: ActiveTab) => void
+  setCanvasSize: (size: { width: number; height: number }) => void
   toggleControlPanel: () => void
   setIsMobile: (isMobile: boolean) => void
 
@@ -109,6 +111,7 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
   selectedLayerId: null,
   crop: { isCropping: false, rect: null, originalRect: null },
   activeTab: 'image',
+  canvasSize: { width: 800, height: 600 },
   isControlPanelOpen: false,
   isMobile: false,
   history: [],
@@ -123,13 +126,24 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
   clearBaseImage: () => set({ baseImage: null, baseImageFile: null, baseImageSize: null, layers: [], selectedLayerId: null }),
 
   // Watermark image
-  addImageWatermark: (dataUrl, file) => {
+  addImageWatermark: (dataUrl, file, rectOverride?: Rect) => {
+    const state = get()
+    const cw = state.canvasSize.width
+    const ch = state.canvasSize.height
+    const logoW = Math.min(300, Math.round(cw * 0.25))
+    const logoH = Math.round(logoW * 0.75)
+    const rect = rectOverride ?? {
+      x: Math.round((cw - logoW) / 2),
+      y: Math.round((ch - logoH) / 2),
+      width: logoW,
+      height: logoH,
+    }
     const newLayer: WatermarkImage = {
       id: generateId(),
       type: 'image',
       dataUrl,
       originalFile: file,
-      rect: { x: 50, y: 50, width: 150, height: 150 },
+      rect,
       cropRect: null,
       opacity: 0.8,
       scale: 1,
@@ -173,11 +187,12 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
 
   // Text watermark
   addTextWatermark: () => {
+    const cw = get().canvasSize.width
     const newLayer: WatermarkText = {
       id: generateId(),
       type: 'text',
       text: 'Watermark',
-      position: { x: 100, y: 100 },
+      position: { x: Math.round(cw / 2) - 60, y: 100 },
       fontSize: 32,
       fontFamily: 'Arial',
       color: '#ffffff',
@@ -272,6 +287,7 @@ export const useWatermarkStore = create<AppState>((set, get) => ({
 
   // UI
   setActiveTab: (tab) => set({ activeTab: tab }),
+  setCanvasSize: (size) => set({ canvasSize: size }),
   toggleControlPanel: () => set((state) => ({ isControlPanelOpen: !state.isControlPanelOpen })),
   setIsMobile: (isMobile) => set({ isMobile }),
 
