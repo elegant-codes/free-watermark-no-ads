@@ -88,13 +88,13 @@ function MobileFixedBar() {
 
   return (
     <div className="flex h-[38vh] shrink-0 flex-col border-t bg-background safe-bottom">
-      <div className="flex items-center justify-between border-b px-3 py-1.5">
+      <div className="flex items-center justify-between border-b px-4 py-2">
         <span className="text-xs font-medium">
           Controls
           {isCropping && <span className="ml-2 text-xs text-blue-500">(Crop mode)</span>}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto px-1 pb-2">
+      <div className="flex-1 overflow-y-auto px-4 pb-6">
         <ControlPanel />
       </div>
     </div>

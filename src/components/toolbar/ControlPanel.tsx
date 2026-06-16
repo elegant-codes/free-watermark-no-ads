@@ -354,7 +354,7 @@ export default function ControlPanel() {
           <span className="hidden sm:inline">Settings</span>
         </TabsTrigger>
       </TabsList>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-4">
         <TabsContent value="image" className="mt-0">
           <ImageTab />
         </TabsContent>
