@@ -23,7 +23,6 @@ function LayerImage({ layer, onSelect, onDragEnd, onTransformEnd, registerShape 
   registerShape: (id: string, node: Konva.Shape | null) => void
 }) {
   const img = useImageLoader(layer.dataUrl)
-
   return img ? (
     <Image
       ref={(node) => registerShape(layer.id, node)}
@@ -95,6 +94,8 @@ export default function WatermarkCanvas() {
 
   const stageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
+  const cropTransformerRef = useRef<Konva.Transformer>(null)
+  const cropRectRef = useRef<Konva.Rect>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const shapeRefs = useRef<Map<string, Konva.Shape>>(new Map())
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
@@ -130,21 +131,32 @@ export default function WatermarkCanvas() {
 
   useEffect(() => {
     if (!transformerRef.current) return
-    if (selectedLayerId && shapeRefs.current.has(selectedLayerId)) {
+    if (!isCropping && selectedLayerId && shapeRefs.current.has(selectedLayerId)) {
       transformerRef.current.nodes([shapeRefs.current.get(selectedLayerId)!])
     } else {
       transformerRef.current.nodes([])
     }
     transformerRef.current.getLayer()?.batchDraw()
-  }, [selectedLayerId, layers])
+  }, [selectedLayerId, layers, isCropping])
+
+  useEffect(() => {
+    if (!cropTransformerRef.current || !cropRectRef.current) return
+    if (isCropping && crop.rect) {
+      cropTransformerRef.current.nodes([cropRectRef.current])
+    } else {
+      cropTransformerRef.current.nodes([])
+    }
+    cropTransformerRef.current.getLayer()?.batchDraw()
+  }, [isCropping, crop.rect])
 
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (isCropping) return
       if (e.target === e.target.getStage()) {
         selectLayer(null)
       }
     },
-    [selectLayer]
+    [selectLayer, isCropping]
   )
 
   const registerShape = useCallback((id: string, node: Konva.Shape | null) => {
@@ -169,7 +181,12 @@ export default function WatermarkCanvas() {
         if (!node) return
         updatePosition(id, node.x(), node.y())
         updateTransform(id, {
-          rect: { x: node.x(), y: node.y(), width: Math.max(10, node.width() * node.scaleX()), height: Math.max(10, node.height() * node.scaleY()) },
+          rect: {
+            x: node.x(),
+            y: node.y(),
+            width: Math.max(10, node.width() * node.scaleX()),
+            height: Math.max(10, node.height() * node.scaleY()),
+          },
           scale: 1,
           rotation: node.rotation(),
         })
@@ -189,9 +206,36 @@ export default function WatermarkCanvas() {
     [layers, updatePosition, updateTransform, updateTextWatermark, pushHistory]
   )
 
+  const handleCropDragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      updateCropRect({
+        x: e.target.x(),
+        y: e.target.y(),
+        width: crop.rect?.width ?? 100,
+        height: crop.rect?.height ?? 100,
+      })
+    },
+    [crop.rect, updateCropRect]
+  )
+
+  const handleCropTransformEnd = useCallback(() => {
+    const node = cropRectRef.current
+    if (!node) return
+    updateCropRect({
+      x: node.x(),
+      y: node.y(),
+      width: node.width() * node.scaleX(),
+      height: node.height() * node.scaleY(),
+    })
+    node.scaleX(1)
+    node.scaleY(1)
+    node.getLayer()?.batchDraw()
+  }, [updateCropRect])
+
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (!isCropping) return
+      if (crop.rect) return
       const stage = e.target.getStage()
       if (!stage) return
       const pos = stage.getPointerPosition()
@@ -204,7 +248,7 @@ export default function WatermarkCanvas() {
         currentY: pos.y,
       })
     },
-    [isCropping]
+    [isCropping, crop.rect]
   )
 
   const handleMouseMove = useCallback(
@@ -233,13 +277,15 @@ export default function WatermarkCanvas() {
     setCropDraw(null)
   }, [cropDraw, updateCropRect])
 
-  const cropRect = useMemo(() => {
-    if (!cropDraw?.active) return crop.rect
-    const x = Math.min(cropDraw.startX, cropDraw.currentX)
-    const y = Math.min(cropDraw.startY, cropDraw.currentY)
-    const w = Math.abs(cropDraw.currentX - cropDraw.startX)
-    const h = Math.abs(cropDraw.currentY - cropDraw.startY)
-    return { x, y, width: w, height: h } as import('@/types').Rect
+  const displayCropRect = useMemo(() => {
+    if (cropDraw?.active) {
+      const x = Math.min(cropDraw.startX, cropDraw.currentX)
+      const y = Math.min(cropDraw.startY, cropDraw.currentY)
+      const w = Math.abs(cropDraw.currentX - cropDraw.startX)
+      const h = Math.abs(cropDraw.currentY - cropDraw.startY)
+      return { x, y, width: w, height: h } as import('@/types').Rect
+    }
+    return crop.rect
   }, [cropDraw, crop.rect])
 
   if (!baseImage) {
@@ -281,17 +327,9 @@ export default function WatermarkCanvas() {
         onTouchStart={handleMouseDown}
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp}
-        className="max-h-full max-w-full"
       >
         <Layer>
-          {bgImage && (
-            <Image
-              image={bgImage}
-              width={dimensions.width}
-              height={dimensions.height}
-              fill="contain"
-            />
-          )}
+          {bgImage && <Image image={bgImage} width={dimensions.width} height={dimensions.height} />}
 
           {layers.map((layer) =>
             layer.type === 'image' ? (
@@ -315,26 +353,29 @@ export default function WatermarkCanvas() {
             )
           )}
 
-          {cropRect && isCropping && (
+          {displayCropRect && isCropping && (
             <Rect
-              x={cropRect.x}
-              y={cropRect.y}
-              width={cropRect.width}
-              height={cropRect.height}
+              ref={cropRectRef}
+              x={displayCropRect.x}
+              y={displayCropRect.y}
+              width={displayCropRect.width}
+              height={displayCropRect.height}
               stroke="#3b82f6"
               strokeWidth={2}
-              fill="rgba(59, 130, 246, 0.1)"
+              fill="rgba(59, 130, 246, 0.08)"
               dash={[6, 3]}
-              draggable={false}
+              draggable={!cropDraw?.active}
+              onDragEnd={handleCropDragEnd}
+              onTransformEnd={handleCropTransformEnd}
             />
           )}
 
-          {(cropRect && isCropping) && (
+          {displayCropRect && isCropping && !cropDraw?.active && (
             <>
-              <Line points={[0, cropRect.y, dimensions.width, cropRect.y]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
-              <Line points={[0, cropRect.y + cropRect.height, dimensions.width, cropRect.y + cropRect.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
-              <Line points={[cropRect.x, 0, cropRect.x, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
-              <Line points={[cropRect.x + cropRect.width, 0, cropRect.x + cropRect.width, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+              <Line points={[0, displayCropRect.y, dimensions.width, displayCropRect.y]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.4} />
+              <Line points={[0, displayCropRect.y + displayCropRect.height, dimensions.width, displayCropRect.y + displayCropRect.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.4} />
+              <Line points={[displayCropRect.x, 0, displayCropRect.x, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.4} />
+              <Line points={[displayCropRect.x + displayCropRect.width, 0, displayCropRect.x + displayCropRect.width, dimensions.height]} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.4} />
             </>
           )}
 
@@ -350,6 +391,24 @@ export default function WatermarkCanvas() {
             anchorCornerRadius={2}
             boundBoxFunc={(oldBox, newBox) => {
               if (newBox.width < 20 || newBox.height < 20) return oldBox
+              return newBox
+            }}
+            visible={!isCropping}
+          />
+
+          <Transformer
+            ref={cropTransformerRef}
+            rotateEnabled={false}
+            enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+            borderStroke="#3b82f6"
+            borderStrokeWidth={2}
+            anchorFill="#3b82f6"
+            anchorStroke="#ffffff"
+            anchorSize={10}
+            anchorCornerRadius={2}
+            visible={isCropping && !!crop.rect}
+            boundBoxFunc={(oldBox, newBox) => {
+              if (newBox.width < 10 || newBox.height < 10) return oldBox
               return newBox
             }}
           />
