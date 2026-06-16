@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Stage, Layer, Image, Transformer, Text, Rect, Line } from 'react-konva'
 import type Konva from 'konva'
+import { Upload } from 'lucide-react'
 import { useWatermarkStore } from '@/store/useWatermarkStore'
 import { loadImageFromDataUrl } from '@/utils/image'
 import { scaleToFit } from '@/utils/cn'
+import { Button } from '@/components/ui/button'
 
 function useImageLoader(dataUrl: string | null): HTMLImageElement | null {
   const [img, setImg] = useState<HTMLImageElement | null>(null)
@@ -114,6 +116,20 @@ export default function WatermarkCanvas() {
   } | null>(null)
 
   const [imageFit, setImageFit] = useState({ scale: 1, offsetX: 0, offsetY: 0, displayW: 0, displayH: 0 })
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileUpload = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (typeof ev.target?.result === 'string') {
+        useWatermarkStore.getState().setBaseImage(ev.target.result, file)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [])
 
   useEffect(() => {
     const updateSize = () => {
@@ -312,15 +328,30 @@ export default function WatermarkCanvas() {
     return (
       <div
         ref={containerRef}
-        className="flex h-full w-full items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/10 p-8"
+        className="flex h-full w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/10 p-8 transition-colors hover:border-primary/50 hover:bg-muted/20"
+        onClick={() => fileInputRef.current?.click()}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
         <div className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Upload className="h-6 w-6 text-muted-foreground" />
+          </div>
           <p className="text-lg font-medium text-muted-foreground">
             Upload an image to get started
           </p>
           <p className="mt-1 text-sm text-muted-foreground/60">
-            Supported formats: PNG, JPEG, WebP
+            Click to browse &middot; PNG, JPEG, WebP
           </p>
+          <Button variant="default" size="sm" className="mt-4 gap-2 pointer-events-none">
+            <Upload className="h-4 w-4" />
+            Choose Image
+          </Button>
         </div>
       </div>
     )
